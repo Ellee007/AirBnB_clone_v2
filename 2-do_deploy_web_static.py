@@ -1,47 +1,55 @@
 #!/usr/bin/python3
-"""Fabric script that generates a .tgz archive from contents of web_static"""
-from fabric.api import local, env, put, run, runs_once, sudo
+"""Distributes an archive to your web servers, using the function do_deploy"""
 from datetime import datetime
-import os
+from fabric.api import *
+from os import path
 
-env.hosts = ['ubuntu@100.26.233.107', 'ubuntu@18.204.8.41']
+
+env.hosts = ['34.148.28.190', '18.207.93.156']
 
 
 @runs_once
 def do_pack():
-    """creates a tar file"""
-    local("mkdir -p versions")
-    path = ("versions/web_static_{}.tgz".format(
-        datetime.strftime(datetime.now(), "%Y%m%d%H%M%S")))
-    result = local("tar -cvzf {} web_static".format(path))
+    """Generates a .tgz archive from the contents
+    of the web_static folder of this repository.
+    """
 
-    if result.failed:
-        return None
+    d = datetime.now()
+    now = d.strftime('%Y%m%d%H%M%S')
+    path = "versions/web_static_{}.tgz".format(now)
+
+    local("mkdir -p versions")
+    local("tar -czvf {} web_static".format(path))
     return path
 
 
 def do_deploy(archive_path):
-    """Deploys static files to the host servers
-    Args:
-        archive_path (str): path to archived static file
+    """Distributes a .tgz archive through web servers
     """
 
-    if not os.path.exists(archive_path):
-        return False
-    file_name = os.path.basename(archive_path)
-    folder_name = file_name.replace(".tgz", "")
-    folder_path = "/data/web_static/releases/{}/".format(folder_name)
-    try:
-        put(archive_path, "/tmp/{}".format(file_name))
-        sudo("mkdir -p {}".format(folder_path))
-        sudo("tar -xzf /tmp/{} -C {}".format(file_name, folder_path))
-        sudo("rm -rf /tmp/{}".format(file_name))
-        sudo("mv {}web_static/* {}".format(folder_path, folder_path))
-        sudo("rm -rf {}web_static".format(folder_path))
-        sudo("rm -rf /data/web_static/current")
-        sudo("ln -s {} /data/web_static/current".format(folder_path))
-        print("New version is now LIVE!")
-        success = True
-    except Exception:
-        success = False
-    return success
+    if path.exists(archive_path):
+        archive = archive_path.split('/')[1]
+        a_path = "/tmp/{}".format(archive)
+        folder = archive.split('.')[0]
+        f_path = "/data/web_static/releases/{}/".format(folder)
+
+        put(archive_path, a_path)
+        run("mkdir -p {}".format(f_path))
+        run("tar -xzf {} -C {}".format(a_path, f_path))
+        run("rm {}".format(a_path))
+        run("mv -f {}web_static/* {}".format(f_path, f_path))
+        run("rm -rf {}web_static".format(f_path))
+        run("rm -rf /data/web_static/current")
+        run("ln -s {} /data/web_static/current".format(f_path))
+
+        return True
+
+    return False
+
+
+def deploy():
+    """Creates and Distributes a .tgz archive through web servers
+    """
+
+    archive = do_pack()
+    return do_deploy(archive)
